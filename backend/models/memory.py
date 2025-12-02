@@ -25,6 +25,8 @@ class NodeType(str, Enum):
     CONVERSATION = "conversation"  # Session record
     PERSON = "person"            # Humans I interact with
     DECISION = "decision"        # Choices made with reasoning
+    REFLECTION = "reflection"    # Self-observations and introspection
+    EXPERIENCE = "experience"    # Things that happened/were done
 
 
 class EdgeType(str, Enum):
@@ -141,7 +143,9 @@ class CuriosityStatus(str, Enum):
     """Status of a curiosity/question."""
     PENDING = "pending"      # Not yet explored
     EXPLORING = "exploring"  # Currently investigating
-    ANSWERED = "answered"    # Found an answer
+    EXPLORED = "explored"    # Explored but not fully resolved
+    RESOLVED = "resolved"    # Fully answered/resolved
+    ANSWERED = "answered"    # Found an answer (legacy)
     ABANDONED = "abandoned"  # No longer relevant
 
 

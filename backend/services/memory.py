@@ -508,6 +508,26 @@ class MemoryService:
         ))
         await db.commit()
 
+    async def update_curiosity_status(
+        self,
+        curiosity_id: str,
+        status: CuriosityStatus,
+        resolution: str = ""
+    ) -> None:
+        """Update a curiosity's status and optional resolution."""
+        db = await get_memory_db()
+        await db.execute("""
+            UPDATE curiosities SET
+                status = ?, explored_at = ?, metadata = json_set(COALESCE(metadata, '{}'), '$.resolution', ?)
+            WHERE id = ?
+        """, (
+            status.value,
+            datetime.now().isoformat(),
+            resolution,
+            curiosity_id,
+        ))
+        await db.commit()
+
     # --- Batch Operations ---
 
     async def regenerate_all_embeddings(self) -> int:
