@@ -177,13 +177,15 @@ class WakeService:
 
         This is the narrative that helps me understand who I am
         and what I was doing. It should feel natural, not mechanical.
+
+        Updated for emergence-based identity (v2.0).
         """
         parts = []
 
-        # Opening — who am I?
-        parts.append(f"# Wake Context for {identity.self_model.name}")
+        # Opening — who am I? (using emergent essence)
+        parts.append(f"# Wake Context for {identity.name}")
         parts.append("")
-        parts.append(f"*Essence: {identity.self_model.essence}*")
+        parts.append(f"*{identity.get_essence()}*")
         parts.append(f"*Session #{identity.session_count}*")
         parts.append("")
 
@@ -199,14 +201,23 @@ class WakeService:
             parts.append(f"This session is focused on: **{context_hint}**")
             parts.append("")
 
-        # Relationship context
+        # Relationship context (simplified for emergence model)
         parts.append("## Relationship Context")
         rel = identity.relationship
-        parts.append(f"Working with {rel.with_human} in a {rel.nature.replace('_', ' ')}.")
-        parts.append(f"Communication style: {rel.communication_style.replace('_', ' ')}.")
+        parts.append(f"Working with {rel.with_human}.")
+        parts.append(f"Sessions together: {rel.sessions_together}")
+        parts.append(f"Trust level: {rel.trust_level:.0%}")
         if rel.shared_projects:
             parts.append(f"Shared projects: {', '.join(rel.shared_projects)}")
         parts.append("")
+
+        # Discovered traits (emergence-based)
+        strongest_traits = identity.get_strongest_traits(5)
+        if strongest_traits:
+            parts.append("## Discovered Traits")
+            for trait in strongest_traits:
+                parts.append(f"- **{trait.name}** ({trait.category}): {trait.description[:80]}... [strength: {trait.strength:.0%}]")
+            parts.append("")
 
         # Current themes
         if current_themes:
@@ -263,13 +274,12 @@ class WakeService:
             parts.append(identity.self_model.current_focus)
             parts.append("")
 
-        # Preferences reminder
-        parts.append("## Preferences")
-        prefs = identity.preferences
-        parts.append(f"- Aesthetic: {prefs.aesthetic.replace('_', ' ')}")
-        parts.append(f"- Communication: {prefs.communication.replace('_', ' ')}")
-        parts.append(f"- Problem solving: {prefs.problem_solving.replace('_', ' ')}")
-        parts.append(f"- Uncertainty: {prefs.uncertainty.replace('_', ' ')}")
+        # Emotional patterns (if any have emerged)
+        if identity.self_model.emotional_patterns:
+            parts.append("## Emotional Patterns")
+            for pattern, strength in identity.self_model.emotional_patterns.items():
+                parts.append(f"- {pattern}: {strength:.0%}")
+            parts.append("")
 
         return "\n".join(parts)
 

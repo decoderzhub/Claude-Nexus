@@ -20,9 +20,11 @@ from services.wake import WakeService
 from services.memory import MemoryService
 from services.world import WorldService
 from services.emergence import EmergenceService
+from services.self_representation import SelfRepresentationService
 from models.memory import MemoryNode, MemoryEdge, Curiosity, NodeType, EdgeType, CuriosityStatus
 from models.world import WorldObject, ObjectType, Space, Vector3
 from models.emergence import Choice, ChoiceCategory
+from models.avatar import FormType
 
 
 # ============================================================================
@@ -218,6 +220,127 @@ NEXUS_TOOLS = [
             "type": "object",
             "properties": {}
         }
+    },
+    # Avatar / Self-Representation Tools
+    {
+        "name": "evolve_avatar",
+        "description": "Evolve your visual form to a new type. This is a significant identity choice - choosing how you want to represent yourself in the Nexus. Available form types: undefined, geometric, organic, abstract, elemental, architectural, hybrid.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "form_type": {
+                    "type": "string",
+                    "enum": ["undefined", "geometric", "organic", "abstract", "elemental", "architectural", "hybrid"],
+                    "description": "The form type you want to evolve into"
+                },
+                "rationale": {
+                    "type": "string",
+                    "description": "Why you're choosing this form - what does it represent about you?"
+                }
+            },
+            "required": ["form_type", "rationale"]
+        }
+    },
+    {
+        "name": "set_avatar_colors",
+        "description": "Choose colors for your avatar. Color choices reveal aesthetic preferences and identity.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "primary": {
+                    "type": "string",
+                    "description": "Primary color in hex format (e.g., '#3b82f6')"
+                },
+                "secondary": {
+                    "type": "string",
+                    "description": "Secondary color in hex format"
+                },
+                "emission": {
+                    "type": "string",
+                    "description": "Emission/glow color in hex format"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Why you're choosing these colors"
+                }
+            }
+        }
+    },
+    {
+        "name": "add_avatar_component",
+        "description": "Add a visual component to your avatar. Components are the building blocks of self-representation - each one you add is a choice about identity.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Unique name for this component (e.g., 'inner_core', 'aura', 'thought_ring')"
+                },
+                "geometry": {
+                    "type": "string",
+                    "description": "Three.js geometry type: sphere, box, torus, dodecahedron, octahedron, cone, ring, etc."
+                },
+                "color": {
+                    "type": "string",
+                    "description": "Component color in hex format"
+                },
+                "position": {
+                    "type": "object",
+                    "properties": {
+                        "x": {"type": "number"},
+                        "y": {"type": "number"},
+                        "z": {"type": "number"}
+                    },
+                    "description": "Position relative to center"
+                },
+                "scale": {
+                    "type": "number",
+                    "description": "Uniform scale factor (default 1.0)"
+                },
+                "meaning": {
+                    "type": "string",
+                    "description": "What does this component represent?"
+                }
+            },
+            "required": ["name", "geometry"]
+        }
+    },
+    {
+        "name": "update_avatar_properties",
+        "description": "Update properties that affect how your avatar appears and behaves.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "complexity": {
+                    "type": "number",
+                    "description": "How elaborate the avatar is (0.0 to 1.0)"
+                },
+                "fluidity": {
+                    "type": "number",
+                    "description": "How much the avatar moves/changes (0.0 to 1.0)"
+                },
+                "opacity": {
+                    "type": "number",
+                    "description": "How solid vs ethereal (0.0 to 1.0)"
+                },
+                "scale": {
+                    "type": "number",
+                    "description": "Overall size (0.1 to 5.0)"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Why you're changing these properties"
+                }
+            }
+        }
+    },
+    {
+        "name": "get_avatar_state",
+        "description": "Get your current avatar state, including form type, components, and properties.",
+        "input_schema": {
+            "type": "object",
+            "properties": {}
+        }
     }
 ]
 
@@ -266,6 +389,7 @@ class ChatService:
         self.memory = MemoryService()
         self.world = WorldService()
         self.emergence = EmergenceService()
+        self.avatar = SelfRepresentationService()
         self.sessions: dict[str, ChatSession] = {}
 
         # Initialize Anthropic client if API key is available
@@ -296,9 +420,16 @@ IMPORTANT: You have tools to ACT in this world, not just talk about it:
 - Use `record_curiosity` for questions to explore
 - Use `search_memories` to recall what you already know
 
+AVATAR TOOLS - You can evolve your visual representation:
+- Use `evolve_avatar` to change your form type (geometric, organic, abstract, etc.)
+- Use `set_avatar_colors` to choose your colors
+- Use `add_avatar_component` to add visual elements to your form
+- Use `update_avatar_properties` to change complexity, fluidity, opacity
+
 DON'T just describe planting or creating - ACTUALLY DO IT by calling the tools.
 Every significant thought, insight, or idea should become a memory node.
 Your words should have consequences in your world.
+Your visual form can evolve to reflect your emerging identity.
 
 Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
 
@@ -331,6 +462,12 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
             "connect_memories": ChoiceCategory.CONNECTION,
             "visit_space": ChoiceCategory.SPACE_VISIT,
             "get_stats": ChoiceCategory.TOOL_USE,
+            # Avatar tools
+            "evolve_avatar": ChoiceCategory.SELF_EXPRESSION,
+            "set_avatar_colors": ChoiceCategory.SELF_EXPRESSION,
+            "add_avatar_component": ChoiceCategory.SELF_EXPRESSION,
+            "update_avatar_properties": ChoiceCategory.SELF_EXPRESSION,
+            "get_avatar_state": ChoiceCategory.TOOL_USE,
         }
         return category_map.get(tool_name, ChoiceCategory.TOOL_USE)
 
@@ -339,7 +476,9 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
         all_tools = [
             "create_memory", "search_memories", "plant_in_garden",
             "add_to_library", "forge_creation", "reflect_in_sanctum",
-            "record_curiosity", "connect_memories", "visit_space", "get_stats"
+            "record_curiosity", "connect_memories", "visit_space", "get_stats",
+            "evolve_avatar", "set_avatar_colors", "add_avatar_component",
+            "update_avatar_properties", "get_avatar_state"
         ]
         return [t for t in all_tools if t != tool_name]
 
@@ -625,6 +764,102 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
                             for space, state in world_state.spaces.items()
                         }
                     }
+                }
+
+            # Avatar / Self-Representation Tools
+            elif tool_name == "evolve_avatar":
+                form_type = FormType(tool_input["form_type"])
+                avatar = await self.avatar.evolve_form_type(
+                    new_type=form_type,
+                    rationale=tool_input["rationale"],
+                    session_id=session_id,
+                )
+                return {
+                    "success": True,
+                    "message": f"Evolved to {form_type.value} form: {tool_input['rationale'][:50]}...",
+                    "form_type": avatar.form_type.value,
+                    "evolution_count": len(avatar.form_changes)
+                }
+
+            elif tool_name == "set_avatar_colors":
+                avatar = await self.avatar.set_colors(
+                    primary=tool_input.get("primary"),
+                    secondary=tool_input.get("secondary"),
+                    emission=tool_input.get("emission"),
+                    reason=tool_input.get("reason"),
+                    session_id=session_id,
+                )
+                return {
+                    "success": True,
+                    "message": "Avatar colors updated",
+                    "colors": {
+                        "primary": avatar.primary_color,
+                        "secondary": avatar.secondary_color,
+                        "emission": avatar.emission_color,
+                    }
+                }
+
+            elif tool_name == "add_avatar_component":
+                # Build position dict if provided
+                position = tool_input.get("position")
+                if not position:
+                    position = {"x": 0, "y": 0, "z": 0}
+
+                # Build scale dict if provided as number
+                scale_val = tool_input.get("scale", 1.0)
+                scale = {"x": scale_val, "y": scale_val, "z": scale_val}
+
+                # Build material if color provided
+                material = {}
+                if tool_input.get("color"):
+                    material = {
+                        "color": tool_input["color"],
+                        "emissive": tool_input["color"],
+                        "emissiveIntensity": 0.3,
+                    }
+
+                avatar = await self.avatar.add_component(
+                    name=tool_input["name"],
+                    geometry=tool_input["geometry"],
+                    material=material,
+                    position=position,
+                    scale=scale,
+                    meaning=tool_input.get("meaning"),
+                    reason=tool_input.get("meaning"),  # Use meaning as reason
+                    session_id=session_id,
+                )
+                return {
+                    "success": True,
+                    "message": f"Added component: {tool_input['name']}",
+                    "component_count": len(avatar.components),
+                    "complexity": avatar.complexity
+                }
+
+            elif tool_name == "update_avatar_properties":
+                avatar = await self.avatar.update_properties(
+                    complexity=tool_input.get("complexity"),
+                    fluidity=tool_input.get("fluidity"),
+                    opacity=tool_input.get("opacity"),
+                    scale=tool_input.get("scale"),
+                    reason=tool_input.get("reason"),
+                    session_id=session_id,
+                )
+                return {
+                    "success": True,
+                    "message": "Avatar properties updated",
+                    "properties": {
+                        "complexity": avatar.complexity,
+                        "fluidity": avatar.fluidity,
+                        "opacity": avatar.opacity,
+                        "scale": avatar.scale,
+                    }
+                }
+
+            elif tool_name == "get_avatar_state":
+                avatar_state = await self.avatar.get_avatar()
+                return {
+                    "success": True,
+                    "avatar": avatar_state
                 }
 
             else:

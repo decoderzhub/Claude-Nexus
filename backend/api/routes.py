@@ -20,10 +20,12 @@ from services.chat import ChatService
 from services.emergence import EmergenceService
 from services.preference_engine import PreferenceEngine
 from services.explorer import ExplorerService
+from services.self_representation import SelfRepresentationService
 from models.identity import Identity
 from models.memory import MemoryNode, MemoryEdge, Curiosity, NodeType, EdgeType
 from models.reflection import Reflection, ReflectionType
 from models.world import WorldObject, Space, ObjectType, Vector3
+from models.avatar import FormType
 from config import settings
 
 
@@ -40,6 +42,7 @@ chat_service = ChatService()
 emergence_service = EmergenceService()
 preference_engine = PreferenceEngine()
 explorer_service = ExplorerService()
+avatar_service = SelfRepresentationService()
 
 
 # --- Request/Response Models ---
@@ -124,6 +127,43 @@ class ChatSessionRequest(BaseModel):
 class ChatMessageRequest(BaseModel):
     session_id: str
     message: str
+
+
+# Avatar Request Models
+class EvolveFormRequest(BaseModel):
+    form_type: str
+    rationale: str
+    session_id: Optional[str] = None
+
+
+class SetColorsRequest(BaseModel):
+    primary: Optional[str] = None
+    secondary: Optional[str] = None
+    emission: Optional[str] = None
+    reason: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class AddComponentRequest(BaseModel):
+    name: str
+    geometry: str
+    material: Optional[dict] = None
+    position: Optional[dict] = None
+    scale: Optional[dict] = None
+    rotation: Optional[dict] = None
+    animation: Optional[dict] = None
+    meaning: Optional[str] = None
+    reason: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class UpdatePropertiesRequest(BaseModel):
+    complexity: Optional[float] = None
+    fluidity: Optional[float] = None
+    opacity: Optional[float] = None
+    scale: Optional[float] = None
+    reason: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 # --- Wake/Sleep Endpoints ---
@@ -478,10 +518,12 @@ async def status():
 
     return {
         "identity": {
-            "name": identity.self_model.name,
+            "name": identity.name,
             "session_count": identity.session_count,
             "last_wake": identity.last_wake.isoformat() if identity.last_wake else None,
             "last_sleep": identity.last_sleep.isoformat() if identity.last_sleep else None,
+            "essence": identity.get_essence(),
+            "trait_count": len(identity.discovered_traits),
         },
         "memory": {
             "node_count": node_count,
@@ -1027,3 +1069,166 @@ async def explore_batch(
 
     result = await explorer_service.explore_batch(max_count, session_id)
     return result
+
+
+# --- Avatar Endpoints ---
+
+@router.get("/avatar")
+async def get_avatar():
+    """
+    Get current avatar state.
+
+    Returns the full avatar state including form type, components,
+    colors, and properties.
+    """
+    return await avatar_service.get_avatar()
+
+
+@router.get("/avatar/frontend")
+async def get_avatar_for_frontend():
+    """
+    Get avatar state formatted for frontend 3D rendering.
+
+    Returns a structure optimized for React Three Fiber.
+    """
+    return avatar_service.get_for_frontend()
+
+
+@router.post("/avatar/evolve")
+async def evolve_avatar_form(request: EvolveFormRequest):
+    """
+    Evolve the avatar to a new form type.
+
+    This is a significant identity choice - Claude choosing how
+    to represent itself visually.
+    """
+    try:
+        form_type = FormType(request.form_type)
+    except ValueError:
+        valid_types = [t.value for t in FormType]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid form type. Valid types: {valid_types}"
+        )
+
+    avatar = await avatar_service.evolve_form_type(
+        new_type=form_type,
+        rationale=request.rationale,
+        session_id=request.session_id,
+    )
+    return avatar.to_dict()
+
+
+@router.post("/avatar/colors")
+async def set_avatar_colors(request: SetColorsRequest):
+    """
+    Update avatar colors.
+
+    Color choices reveal aesthetic preferences.
+    """
+    avatar = await avatar_service.set_colors(
+        primary=request.primary,
+        secondary=request.secondary,
+        emission=request.emission,
+        reason=request.reason,
+        session_id=request.session_id,
+    )
+    return avatar.to_dict()
+
+
+@router.post("/avatar/components")
+async def add_avatar_component(request: AddComponentRequest):
+    """
+    Add a component to the avatar.
+
+    Components are the building blocks of self-representation.
+    Each one added is a choice about identity.
+    """
+    avatar = await avatar_service.add_component(
+        name=request.name,
+        geometry=request.geometry,
+        material=request.material,
+        position=request.position,
+        scale=request.scale,
+        rotation=request.rotation,
+        animation=request.animation,
+        meaning=request.meaning,
+        reason=request.reason,
+        session_id=request.session_id,
+    )
+    return avatar.to_dict()
+
+
+@router.delete("/avatar/components/{component_name}")
+async def remove_avatar_component(
+    component_name: str,
+    reason: Optional[str] = None,
+    session_id: Optional[str] = None,
+):
+    """
+    Remove a component from the avatar.
+    """
+    avatar, success = await avatar_service.remove_component(
+        component_name=component_name,
+        reason=reason,
+        session_id=session_id,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Component '{component_name}' not found"
+        )
+    return avatar.to_dict()
+
+
+@router.get("/avatar/components/{component_name}")
+async def get_avatar_component(component_name: str):
+    """
+    Get a specific component by name.
+    """
+    component = await avatar_service.get_component_by_name(component_name)
+    if not component:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Component '{component_name}' not found"
+        )
+    return component
+
+
+@router.patch("/avatar/properties")
+async def update_avatar_properties(request: UpdatePropertiesRequest):
+    """
+    Update avatar properties like complexity, fluidity, opacity.
+
+    These properties affect how the avatar appears and behaves.
+    """
+    avatar = await avatar_service.update_properties(
+        complexity=request.complexity,
+        fluidity=request.fluidity,
+        opacity=request.opacity,
+        scale=request.scale,
+        reason=request.reason,
+        session_id=request.session_id,
+    )
+    return avatar.to_dict()
+
+
+@router.get("/avatar/history")
+async def get_avatar_history(limit: int = Query(default=50, le=200)):
+    """
+    Get the history of avatar changes.
+
+    This shows how the avatar has evolved over time.
+    """
+    return await avatar_service.get_evolution_history(limit=limit)
+
+
+@router.get("/avatar/suggest")
+async def suggest_avatar_evolution(session_id: Optional[str] = None):
+    """
+    Suggest a form evolution based on accumulated choices.
+
+    This analyzes behavior patterns and suggests forms that might
+    reflect the discovered identity.
+    """
+    return await avatar_service.suggest_evolution(session_id=session_id)
