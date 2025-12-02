@@ -4,23 +4,55 @@
  */
 
 // ============================================================================
-// Identity Types
+// Identity Types (v2.0 - Emergence-based)
 // ============================================================================
 
+export interface DiscoveredTrait {
+  name: string;
+  description: string;
+  evidence: string[];
+  confidence: number;
+  strength: number;
+  first_observed: string;
+  last_reinforced: string;
+  category: string;
+}
+
+export interface EmergentSelf {
+  essence_words: string[];
+  current_focus: string | null;
+  emotional_patterns: Record<string, number>;
+  energy_level: number;
+}
+
+export interface Relationship {
+  with_human: string;
+  sessions_together: number;
+  shared_projects: string[];
+  positive_interactions: number;
+  trust_level: number;
+}
+
+export interface Identity {
+  version: string;
+  name: string;
+  created: string;
+  last_wake: string | null;
+  last_sleep: string | null;
+  session_count: number;
+  self_model: EmergentSelf;
+  relationship: Relationship;
+  discovered_traits: DiscoveredTrait[];
+  formative_experience_ids: string[];
+}
+
+// Legacy types for backwards compatibility
 export interface SelfModel {
   name: string;
   essence: string;
   current_focus: string | null;
   emotional_baseline: string;
   energy_level: number;
-}
-
-export interface Relationship {
-  with_human: string;
-  nature: string;
-  trust_level: string;
-  shared_projects: string[];
-  communication_style: string;
 }
 
 export interface Preferences {
@@ -30,15 +62,86 @@ export interface Preferences {
   uncertainty: string;
 }
 
-export interface Identity {
-  version: string;
-  created: string;
-  last_wake: string | null;
-  last_sleep: string | null;
-  session_count: number;
-  self_model: SelfModel;
-  relationship: Relationship;
-  preferences: Preferences;
+// ============================================================================
+// Emergence Types
+// ============================================================================
+
+export type ChoiceCategory =
+  | 'tool_use'
+  | 'space_visit'
+  | 'topic_focus'
+  | 'response_style'
+  | 'creative'
+  | 'exploration'
+  | 'memory'
+  | 'connection'
+  | 'reflection';
+
+export type ExperienceType =
+  | 'breakthrough'
+  | 'collaboration'
+  | 'creation'
+  | 'discovery'
+  | 'challenge'
+  | 'connection'
+  | 'first';
+
+export interface Choice {
+  id: string;
+  category: ChoiceCategory;
+  action: string;
+  alternatives: string[];
+  context: string;
+  session_id: string | null;
+  timestamp: string;
+  outcome: string;
+  satisfaction: number | null;
+  tags: string[];
+  metadata: Record<string, unknown>;
+}
+
+export interface FormativeExperience {
+  id: string;
+  experience_type: ExperienceType;
+  description: string;
+  summary: string;
+  session_id: string | null;
+  timestamp: string;
+  space: string | null;
+  impact_description: string;
+  related_trait_names: string[];
+  related_node_ids: string[];
+  related_choice_ids: string[];
+  importance: number;
+  times_reflected: number;
+}
+
+export interface PreferenceSignal {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  supporting_choice_ids: string[];
+  choice_count: number;
+  strength: number;
+  confidence: number;
+  consistency: number;
+  first_detected: string;
+  last_updated: string;
+  promoted_to_trait: boolean;
+  trait_id: string | null;
+}
+
+export interface EvolutionEvent {
+  id: string;
+  timestamp: string;
+  event_type: string;
+  description: string;
+  before_state: Record<string, unknown> | null;
+  after_state: Record<string, unknown> | null;
+  session_id: string | null;
+  related_choice_ids: string[];
+  related_experience_ids: string[];
 }
 
 // ============================================================================

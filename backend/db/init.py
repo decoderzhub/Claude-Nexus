@@ -129,6 +129,111 @@ async def init_memory_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_reflections_created ON reflections_index(created_at DESC)
     """)
 
+    # =========================================================================
+    # EMERGENCE TABLES - For identity that grows from experience
+    # =========================================================================
+
+    # Choices table - Every decision logged for pattern analysis
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS choices (
+            id TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            action TEXT NOT NULL,
+            alternatives TEXT DEFAULT '[]',
+            context TEXT,
+            session_id TEXT,
+            timestamp TEXT NOT NULL,
+            outcome TEXT,
+            satisfaction REAL,
+            tags TEXT DEFAULT '[]',
+            metadata TEXT DEFAULT '{}'
+        )
+    """)
+
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_choices_category ON choices(category)
+    """)
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_choices_timestamp ON choices(timestamp DESC)
+    """)
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_choices_session ON choices(session_id)
+    """)
+
+    # Formative experiences table - Significant moments that shape identity
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS formative_experiences (
+            id TEXT PRIMARY KEY,
+            experience_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            summary TEXT,
+            session_id TEXT,
+            timestamp TEXT NOT NULL,
+            space TEXT,
+            impact_description TEXT,
+            related_trait_names TEXT DEFAULT '[]',
+            related_node_ids TEXT DEFAULT '[]',
+            related_choice_ids TEXT DEFAULT '[]',
+            importance REAL DEFAULT 0.5,
+            times_reflected INTEGER DEFAULT 0
+        )
+    """)
+
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_experiences_type ON formative_experiences(experience_type)
+    """)
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_experiences_importance ON formative_experiences(importance DESC)
+    """)
+
+    # Preference signals table - Detected patterns from choice analysis
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS preference_signals (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            category TEXT,
+            description TEXT,
+            supporting_choice_ids TEXT DEFAULT '[]',
+            choice_count INTEGER DEFAULT 0,
+            strength REAL DEFAULT 0.0,
+            confidence REAL DEFAULT 0.0,
+            consistency REAL DEFAULT 0.0,
+            first_detected TEXT NOT NULL,
+            last_updated TEXT NOT NULL,
+            promoted_to_trait INTEGER DEFAULT 0,
+            trait_id TEXT
+        )
+    """)
+
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_signals_strength ON preference_signals(strength DESC)
+    """)
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_signals_promoted ON preference_signals(promoted_to_trait)
+    """)
+
+    # Evolution log table - Track identity changes over time
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS evolution_log (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            before_state TEXT,
+            after_state TEXT,
+            session_id TEXT,
+            related_choice_ids TEXT DEFAULT '[]',
+            related_experience_ids TEXT DEFAULT '[]'
+        )
+    """)
+
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_evolution_timestamp ON evolution_log(timestamp DESC)
+    """)
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_evolution_type ON evolution_log(event_type)
+    """)
+
     await db.commit()
 
 
