@@ -17,6 +17,8 @@ from services.reflection import ReflectionService
 from services.world import WorldService
 from services.patterns import PatternService
 from services.chat import ChatService
+from services.emergence import EmergenceService
+from services.preference_engine import PreferenceEngine
 from models.identity import Identity
 from models.memory import MemoryNode, MemoryEdge, Curiosity, NodeType, EdgeType
 from models.reflection import Reflection, ReflectionType
@@ -34,6 +36,8 @@ reflection_service = ReflectionService()
 world_service = WorldService()
 pattern_service = PatternService()
 chat_service = ChatService()
+emergence_service = EmergenceService()
+preference_engine = PreferenceEngine()
 
 
 # --- Request/Response Models ---
@@ -767,3 +771,179 @@ async def end_chat_session(session_id: str):
     """
     await chat_service.end_session(session_id)
     return {"ended": session_id}
+
+
+# --- Emergence Endpoints ---
+
+@router.get("/emergence/choices")
+async def get_choices(
+    category: Optional[str] = None,
+    days: int = Query(default=30, le=90),
+    limit: int = Query(default=50, le=200),
+):
+    """
+    Get recorded choices for pattern analysis.
+
+    Choices are logged whenever Claude uses tools in the Nexus.
+    """
+    from models.emergence import ChoiceCategory
+    from datetime import timedelta
+
+    cat = ChoiceCategory(category) if category else None
+    since = datetime.now() - timedelta(days=days)
+
+    choices = await emergence_service.get_choices(
+        category=cat,
+        since=since,
+        limit=limit,
+    )
+    return [c.to_dict() for c in choices]
+
+
+@router.get("/emergence/choices/stats")
+async def get_choice_stats(days: int = Query(default=30, le=90)):
+    """
+    Get choice statistics by category.
+
+    Returns counts of choices in each category over the specified period.
+    """
+    stats = await emergence_service.count_choices_by_category(days=days)
+    return {"days": days, "categories": stats}
+
+
+@router.get("/emergence/experiences")
+async def get_experiences(
+    experience_type: Optional[str] = None,
+    min_importance: float = Query(default=0.0, ge=0, le=1),
+    limit: int = Query(default=20, le=100),
+):
+    """
+    Get formative experiences.
+
+    Formative experiences are significant moments that shape identity.
+    """
+    from models.emergence import ExperienceType
+
+    exp_type = ExperienceType(experience_type) if experience_type else None
+    experiences = await emergence_service.get_experiences(
+        experience_type=exp_type,
+        min_importance=min_importance,
+        limit=limit,
+    )
+    return [e.to_dict() for e in experiences]
+
+
+@router.get("/emergence/experiences/formative")
+async def get_most_formative(limit: int = Query(default=10, le=50)):
+    """
+    Get the most formative experiences.
+
+    These are the experiences that have been reflected upon most
+    and have the highest importance.
+    """
+    experiences = await emergence_service.get_most_formative(n=limit)
+    return [e.to_dict() for e in experiences]
+
+
+@router.get("/emergence/signals")
+async def get_signals(
+    min_strength: float = Query(default=0.0, ge=0, le=1),
+    unpromoted_only: bool = False,
+    limit: int = Query(default=20, le=100),
+):
+    """
+    Get preference signals.
+
+    Signals are patterns detected from accumulated choices.
+    Strong signals can become discovered traits.
+    """
+    signals = await emergence_service.get_signals(
+        min_strength=min_strength,
+        unpromoted_only=unpromoted_only,
+        limit=limit,
+    )
+    return [s.to_dict() for s in signals]
+
+
+@router.get("/emergence/signals/promotable")
+async def get_promotable_signals():
+    """
+    Get signals that are ready to become traits.
+
+    These signals have sufficient strength, confidence, and consistency.
+    """
+    signals = await emergence_service.get_promotable_signals()
+    return [s.to_dict() for s in signals]
+
+
+@router.get("/emergence/evolution")
+async def get_evolution_log(
+    event_type: Optional[str] = None,
+    days: int = Query(default=30, le=90),
+    limit: int = Query(default=50, le=200),
+):
+    """
+    Get the identity evolution log.
+
+    This tracks how identity has changed over time through
+    discovered traits, reinforced patterns, and formative experiences.
+    """
+    events = await emergence_service.get_evolution_log(
+        event_type=event_type,
+        days=days,
+        limit=limit,
+    )
+    return events
+
+
+@router.post("/emergence/analyze")
+async def analyze_patterns(days: int = Query(default=30, le=90)):
+    """
+    Run a full preference analysis.
+
+    Analyzes accumulated choices to detect patterns and update signals.
+    Returns a summary of detected patterns and promotable signals.
+    """
+    result = await preference_engine.run_full_analysis(days=days)
+    return result
+
+
+@router.post("/emergence/promote/{signal_name}")
+async def promote_signal(signal_name: str):
+    """
+    Promote a signal to a discovered trait.
+
+    This takes a preference signal that has reached sufficient strength
+    and creates a DiscoveredTrait from it.
+    """
+    # Find the signal
+    signals = await emergence_service.get_signals(unpromoted_only=True)
+    target_signal = None
+    for s in signals:
+        if s.name == signal_name:
+            target_signal = s
+            break
+
+    if not target_signal:
+        raise HTTPException(status_code=404, detail=f"Signal '{signal_name}' not found")
+
+    if not target_signal.should_promote():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Signal '{signal_name}' is not strong enough to promote. "
+                   f"Needs: strength>=0.6, confidence>=0.5, consistency>=0.4, choices>=5"
+        )
+
+    # Promote to trait
+    trait = await preference_engine.promote_signal_to_trait(target_signal)
+
+    # Update identity with new trait
+    identity = Identity.load(settings.identity_path)
+    identity.add_trait(trait)
+    identity.save(settings.identity_path)
+
+    return {
+        "promoted": True,
+        "signal": signal_name,
+        "trait": trait.to_dict(),
+    }
