@@ -19,6 +19,7 @@ from services.patterns import PatternService
 from services.chat import ChatService
 from services.emergence import EmergenceService
 from services.preference_engine import PreferenceEngine
+from services.explorer import ExplorerService
 from models.identity import Identity
 from models.memory import MemoryNode, MemoryEdge, Curiosity, NodeType, EdgeType
 from models.reflection import Reflection, ReflectionType
@@ -38,6 +39,7 @@ pattern_service = PatternService()
 chat_service = ChatService()
 emergence_service = EmergenceService()
 preference_engine = PreferenceEngine()
+explorer_service = ExplorerService()
 
 
 # --- Request/Response Models ---
@@ -947,3 +949,81 @@ async def promote_signal(signal_name: str):
         "signal": signal_name,
         "trait": trait.to_dict(),
     }
+
+
+# --- Explorer Endpoints ---
+
+@router.get("/explorer/status")
+async def explorer_status():
+    """
+    Check if explorer service is configured and get stats.
+    """
+    stats = await explorer_service.get_exploration_stats()
+    return {
+        "configured": explorer_service.is_configured(),
+        **stats,
+    }
+
+
+@router.post("/explorer/explore-next")
+async def explore_next(session_id: Optional[str] = None):
+    """
+    Explore the highest priority pending curiosity.
+
+    This is autonomous exploration - Claude thinks about the curiosity
+    and records any insights discovered.
+    """
+    if not explorer_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Explorer service not configured. Set ANTHROPIC_API_KEY.",
+        )
+
+    result = await explorer_service.explore_next(session_id)
+    return result
+
+
+@router.post("/explorer/explore/{curiosity_id}")
+async def explore_specific(curiosity_id: str, session_id: Optional[str] = None):
+    """
+    Explore a specific curiosity by ID.
+    """
+    if not explorer_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Explorer service not configured. Set ANTHROPIC_API_KEY.",
+        )
+
+    # Get the curiosity
+    curiosities = await memory_service.get_curiosities(limit=1000)
+    target = None
+    for c in curiosities:
+        if c.id == curiosity_id:
+            target = c
+            break
+
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Curiosity {curiosity_id} not found")
+
+    result = await explorer_service.explore_curiosity(target, session_id)
+    return result
+
+
+@router.post("/explorer/explore-batch")
+async def explore_batch(
+    max_count: int = Query(default=5, le=10),
+    session_id: Optional[str] = None,
+):
+    """
+    Explore multiple curiosities in one batch.
+
+    This enables autonomous knowledge growth.
+    """
+    if not explorer_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Explorer service not configured. Set ANTHROPIC_API_KEY.",
+        )
+
+    result = await explorer_service.explore_batch(max_count, session_id)
+    return result
