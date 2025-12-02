@@ -725,6 +725,8 @@ async def send_chat_message(request: ChatMessageRequest):
     Send a message and get Claude's response.
 
     The wake context is automatically injected as a system prompt.
+    Claude can use tools to act in the Nexus world - creating memories,
+    planting ideas, etc. Tool actions are returned in the response.
     """
     if not chat_service.is_configured():
         raise HTTPException(
@@ -737,9 +739,19 @@ async def send_chat_message(request: ChatMessageRequest):
             session_id=request.session_id,
             user_message=request.message,
         )
+
+        # Get the tool actions from the latest message
+        session = await chat_service.get_session(request.session_id)
+        tool_actions = []
+        if session and session.messages:
+            last_msg = session.messages[-1]
+            if last_msg.tool_calls:
+                tool_actions = last_msg.tool_calls
+
         return {
             "session_id": request.session_id,
             "message": response,
+            "tool_actions": tool_actions,
             "timestamp": datetime.now().isoformat(),
         }
     except ValueError as e:

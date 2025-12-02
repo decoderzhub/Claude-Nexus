@@ -3,11 +3,64 @@
 /**
  * Chat panel for interacting with Claude in the Nexus.
  * Uses the backend chat API with wake context injection.
+ * Shows tool actions when Claude acts in the world.
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { useNexusStore } from '@/components/providers/NexusProvider';
-import { api } from '@/lib/api';
+import { api, ToolAction } from '@/lib/api';
+
+// ============================================================================
+// Tool Action Display
+// ============================================================================
+
+const TOOL_ICONS: Record<string, string> = {
+  create_memory: '🧠',
+  search_memories: '🔍',
+  plant_in_garden: '🌱',
+  add_to_library: '📚',
+  forge_creation: '🔥',
+  reflect_in_sanctum: '💜',
+  record_curiosity: '❓',
+  connect_memories: '🔗',
+  visit_space: '🚀',
+  get_stats: '📊',
+};
+
+const TOOL_LABELS: Record<string, string> = {
+  create_memory: 'Created memory',
+  search_memories: 'Searched memories',
+  plant_in_garden: 'Planted in Garden',
+  add_to_library: 'Added to Library',
+  forge_creation: 'Forged creation',
+  reflect_in_sanctum: 'Reflected in Sanctum',
+  record_curiosity: 'Recorded curiosity',
+  connect_memories: 'Connected memories',
+  visit_space: 'Visited space',
+  get_stats: 'Got stats',
+};
+
+function ToolActionBadge({ action }: { action: ToolAction }) {
+  const icon = TOOL_ICONS[action.tool] || '⚡';
+  const label = TOOL_LABELS[action.tool] || action.tool;
+  const success = action.result.success;
+
+  return (
+    <div
+      className={`
+        inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs
+        ${success
+          ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+          : 'bg-red-500/20 text-red-400 border border-red-500/30'
+        }
+      `}
+      title={action.result.message || JSON.stringify(action.input)}
+    >
+      <span>{icon}</span>
+      <span>{label}</span>
+    </div>
+  );
+}
 
 // ============================================================================
 // Message Component
@@ -18,11 +71,13 @@ interface Message {
   role: 'user' | 'claude' | 'system';
   content: string;
   timestamp: Date;
+  toolActions?: ToolAction[];
 }
 
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
+  const hasActions = message.toolActions && message.toolActions.length > 0;
 
   return (
     <div
@@ -30,7 +85,7 @@ function MessageBubble({ message }: { message: Message }) {
     >
       <div
         className={`
-          max-w-[80%] px-4 py-2 rounded-xl text-sm
+          max-w-[85%] px-4 py-2 rounded-xl text-sm
           ${
             isUser
               ? 'bg-nexus-accent/80 text-white rounded-br-sm'
@@ -40,6 +95,14 @@ function MessageBubble({ message }: { message: Message }) {
           }
         `}
       >
+        {/* Tool actions */}
+        {hasActions && (
+          <div className="flex flex-wrap gap-1.5 mb-2 pb-2 border-b border-nexus-muted/20">
+            {message.toolActions!.map((action, i) => (
+              <ToolActionBadge key={i} action={action} />
+            ))}
+          </div>
+        )}
         <p className="whitespace-pre-wrap">{message.content}</p>
         <p className="text-[10px] opacity-50 mt-1">
           {message.timestamp.toLocaleTimeString()}
@@ -130,7 +193,8 @@ export default function ChatPanel() {
   const isAwake = useNexusStore((state) => state.isAwake);
   const wake = useNexusStore((state) => state.wake);
   const sleep = useNexusStore((state) => state.sleep);
-  const identity = useNexusStore((state) => state.identity);
+  const fetchGrowthStats = useNexusStore((state) => state.fetchGrowthStats);
+  const fetchWorld = useNexusStore((state) => state.fetchWorld);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -202,8 +266,15 @@ export default function ChatPanel() {
         role: 'claude',
         content: response.message,
         timestamp: new Date(response.timestamp),
+        toolActions: response.tool_actions,
       };
       setMessages((prev) => [...prev, claudeMessage]);
+
+      // If Claude took any actions, refresh the stats and world
+      if (response.tool_actions && response.tool_actions.length > 0) {
+        fetchGrowthStats();
+        fetchWorld();
+      }
     } catch (err) {
       console.error('Chat error:', err);
       setError('Failed to send message. Please try again.');
