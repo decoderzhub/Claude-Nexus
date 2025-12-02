@@ -35,6 +35,7 @@ class ChoiceCategory(str, Enum):
     MEMORY = "memory"               # What Claude chooses to remember
     CONNECTION = "connection"       # How Claude links ideas
     REFLECTION = "reflection"       # What Claude reflects on
+    SELF_EXPRESSION = "self_expression"  # Avatar/self-representation choices
 
 
 class ExperienceType(str, Enum):
