@@ -46,6 +46,10 @@ interface NexusStore extends NexusState {
   wake: (contextHint?: string) => Promise<WakeResponse>;
   sleep: (sessionData?: SessionData) => Promise<SleepResponse>;
 
+  // Data fetching
+  fetchWorld: () => Promise<void>;
+  fetchGrowthStats: () => Promise<void>;
+
   // World
   visitSpace: (space: SpaceType) => Promise<void>;
 
@@ -125,6 +129,25 @@ const createNexusStore = () =>
       });
 
       return response;
+    },
+
+    // Data fetching
+    fetchWorld: async () => {
+      try {
+        const world = await api.getWorld();
+        set({ world, currentSpace: world.current_space });
+      } catch (error) {
+        console.error('Failed to fetch world state:', error);
+      }
+    },
+
+    fetchGrowthStats: async () => {
+      try {
+        const stats = await api.getGrowthStats();
+        set({ growthStats: stats });
+      } catch (error) {
+        console.error('Failed to fetch growth stats:', error);
+      }
     },
 
     // World

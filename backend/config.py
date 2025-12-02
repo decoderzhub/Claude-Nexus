@@ -68,7 +68,11 @@ class Settings:
 
     def __post_init__(self):
         if self.cors_origins is None:
-            self.cors_origins = ["http://localhost:3000"]
+            self.cors_origins = [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:3001",  # In case Next.js uses alternate port
+            ]
 
         if self.db is None:
             self.db = DatabaseSettings(
