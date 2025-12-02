@@ -103,14 +103,15 @@ export interface Curiosity {
 // Reflection Types
 // ============================================================================
 
+// Match backend: session, insight, question, pattern, growth, uncertainty, connection
 export type ReflectionType =
-  | 'session_end'
+  | 'session'
   | 'insight'
+  | 'question'
   | 'pattern'
   | 'growth'
-  | 'curiosity'
-  | 'mistake'
-  | 'milestone';
+  | 'uncertainty'
+  | 'connection';
 
 export interface Reflection {
   id: string;

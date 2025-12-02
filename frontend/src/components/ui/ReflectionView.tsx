@@ -97,13 +97,14 @@ interface FilterTabsProps {
 }
 
 function FilterTabs({ activeFilter, onFilterChange }: FilterTabsProps) {
+  // Match backend ReflectionType enum: session, insight, question, pattern, growth, uncertainty, connection
   const filters: Array<{ value: ReflectionType | 'all'; label: string }> = [
     { value: 'all', label: 'All' },
     { value: 'insight', label: 'Insights' },
     { value: 'pattern', label: 'Patterns' },
     { value: 'growth', label: 'Growth' },
-    { value: 'curiosity', label: 'Curiosities' },
-    { value: 'session_end', label: 'Sessions' },
+    { value: 'question', label: 'Questions' },
+    { value: 'session', label: 'Sessions' },
   ];
 
   return (
