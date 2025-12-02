@@ -19,8 +19,10 @@ from config import settings
 from services.wake import WakeService
 from services.memory import MemoryService
 from services.world import WorldService
+from services.emergence import EmergenceService
 from models.memory import MemoryNode, MemoryEdge, Curiosity, NodeType, EdgeType, CuriosityStatus
 from models.world import WorldObject, ObjectType, Space, Vector3
+from models.emergence import Choice, ChoiceCategory
 
 
 # ============================================================================
@@ -263,6 +265,7 @@ class ChatService:
         self.wake = WakeService()
         self.memory = MemoryService()
         self.world = WorldService()
+        self.emergence = EmergenceService()
         self.sessions: dict[str, ChatSession] = {}
 
         # Initialize Anthropic client if API key is available
@@ -315,9 +318,45 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
         """Get an existing session."""
         return self.sessions.get(session_id)
 
+    def _get_choice_category(self, tool_name: str) -> ChoiceCategory:
+        """Map tool names to choice categories for pattern analysis."""
+        category_map = {
+            "create_memory": ChoiceCategory.MEMORY,
+            "search_memories": ChoiceCategory.MEMORY,
+            "plant_in_garden": ChoiceCategory.CREATIVE,
+            "add_to_library": ChoiceCategory.MEMORY,
+            "forge_creation": ChoiceCategory.CREATIVE,
+            "reflect_in_sanctum": ChoiceCategory.REFLECTION,
+            "record_curiosity": ChoiceCategory.EXPLORATION,
+            "connect_memories": ChoiceCategory.CONNECTION,
+            "visit_space": ChoiceCategory.SPACE_VISIT,
+            "get_stats": ChoiceCategory.TOOL_USE,
+        }
+        return category_map.get(tool_name, ChoiceCategory.TOOL_USE)
+
+    def _get_alternatives(self, tool_name: str) -> list[str]:
+        """Get alternative tools that could have been chosen."""
+        all_tools = [
+            "create_memory", "search_memories", "plant_in_garden",
+            "add_to_library", "forge_creation", "reflect_in_sanctum",
+            "record_curiosity", "connect_memories", "visit_space", "get_stats"
+        ]
+        return [t for t in all_tools if t != tool_name]
+
     async def _execute_tool(self, tool_name: str, tool_input: dict, session_id: str) -> dict:
-        """Execute a tool and return the result."""
+        """Execute a tool and return the result. Logs choice for emergence system."""
         try:
+            # Log this choice for pattern analysis
+            choice = Choice(
+                category=self._get_choice_category(tool_name),
+                action=tool_name,
+                alternatives=self._get_alternatives(tool_name),
+                context=json.dumps(tool_input)[:500],  # Truncate to avoid huge contexts
+                session_id=session_id,
+                tags=[tool_name, self._get_choice_category(tool_name).value],
+                metadata={"tool_input": tool_input},
+            )
+            await self.emergence.record_choice(choice)
             if tool_name == "create_memory":
                 node = MemoryNode(
                     node_type=NodeType(tool_input.get("node_type", "insight")),
