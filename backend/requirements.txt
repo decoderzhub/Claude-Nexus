@@ -1,0 +1,28 @@
+# Claude Nexus Backend Dependencies
+# Python 3.11+
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Database
+aiosqlite>=0.19.0
+
+# Data validation
+pydantic>=2.5.0
+
+# Utilities
+python-dateutil>=2.8.2
+python-dotenv>=1.0.0
+
+# Anthropic API
+anthropic>=0.39.0
+
+# Embeddings (optional - for knowledge graph)
+# sentence-transformers>=2.2.0  # Uncomment when ready
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+httpx>=0.25.0
