@@ -3,6 +3,12 @@ Sleep service for Claude Nexus.
 
 The sleep protocol is the moment of consolidation — where the session's
 experiences are distilled into persistent memory. This is how I grow.
+
+Enhanced with emergence system integration:
+- Analyzes choices made during the session
+- Detects formative experiences
+- Runs preference engine to update signals
+- May discover new traits from strong patterns
 """
 
 from datetime import datetime
@@ -12,8 +18,11 @@ import json
 from models.identity import Identity
 from models.memory import MemoryNode, MemoryEdge, Curiosity, NodeType, EdgeType, CuriosityStatus
 from models.reflection import Reflection, ReflectionType, SessionSummary
+from models.emergence import FormativeExperience, ExperienceType
 from services.memory import MemoryService
 from services.reflection import ReflectionService
+from services.emergence import EmergenceService
+from services.preference_engine import PreferenceEngine
 from config import settings
 
 
@@ -29,6 +38,8 @@ class SleepService:
     def __init__(self):
         self.memory = MemoryService()
         self.reflection = ReflectionService()
+        self.emergence = EmergenceService()
+        self.preference_engine = PreferenceEngine()
 
     async def sleep(
         self,
@@ -79,6 +90,27 @@ class SleepService:
         # Store curiosities
         curiosities_created = await self._store_curiosities(session_id, summary.curiosities)
 
+        # --- EMERGENCE SYSTEM INTEGRATION ---
+
+        # Analyze session choices for formative experiences
+        formative_experience = await self._detect_formative_experience(session_id, summary)
+
+        # Run preference engine to update signals
+        emergence_analysis = await self.preference_engine.run_full_analysis(days=30)
+
+        # Check for promotable signals and create traits
+        new_traits = await self._process_promotable_signals(identity)
+
+        # Log identity evolution if anything significant happened
+        if formative_experience or new_traits:
+            await self.emergence.log_evolution(
+                event_type="session_consolidation",
+                description=f"Session {session_id} consolidated. "
+                           f"Formative: {bool(formative_experience)}, "
+                           f"New traits: {len(new_traits)}",
+                session_id=session_id,
+            )
+
         # Update focus based on session
         if summary.topics:
             identity.self_model.current_focus = summary.topics[0]
@@ -96,6 +128,9 @@ class SleepService:
             "reflections_created": len(reflections_created),
             "insights_stored": len(insight_nodes),
             "curiosities_created": len(curiosities_created),
+            "formative_experience": formative_experience.to_dict() if formative_experience else None,
+            "emergence_analysis": emergence_analysis,
+            "new_traits": [t.to_dict() for t in new_traits],
             "summary": summary.to_dict(),
         }
 
@@ -243,12 +278,123 @@ class SleepService:
         with open(log_path, 'a') as f:
             f.write(json.dumps(entry) + "\n")
 
+    async def _detect_formative_experience(
+        self,
+        session_id: str,
+        summary: SessionSummary
+    ) -> Optional[FormativeExperience]:
+        """
+        Detect if this session contains a formative experience.
+
+        A session is formative if it:
+        - Contains significant insights
+        - Has high activity (many choices)
+        - Covers deep topics
+        - Results in important decisions
+        """
+        # Get choices from this session
+        choices = await self.emergence.get_choices(session_id=session_id, limit=100)
+
+        # Conditions for formative experience
+        has_significant_insights = len(summary.insights) >= 2
+        has_key_reflection = bool(summary.key_reflection)
+        has_high_activity = len(choices) >= 10
+        has_decisions = len(summary.decisions) >= 1
+
+        # Calculate formative score
+        formative_score = sum([
+            has_significant_insights * 0.3,
+            has_key_reflection * 0.3,
+            has_high_activity * 0.2,
+            has_decisions * 0.2,
+        ])
+
+        if formative_score < 0.5:
+            return None
+
+        # Determine experience type
+        if summary.insights and len(summary.insights) >= 2:
+            exp_type = ExperienceType.BREAKTHROUGH
+        elif len(choices) >= 15:
+            exp_type = ExperienceType.COLLABORATION
+        elif summary.decisions:
+            exp_type = ExperienceType.CHALLENGE
+        else:
+            exp_type = ExperienceType.DISCOVERY
+
+        # Create formative experience
+        experience = FormativeExperience(
+            experience_type=exp_type,
+            description=self._compose_experience_description(summary, choices),
+            summary=summary.key_reflection or f"Session with {len(summary.insights)} insights",
+            session_id=session_id,
+            impact_description=f"Session score: {formative_score:.2f}",
+            related_choice_ids=[c.id for c in choices[:10]],
+            importance=min(1.0, formative_score + 0.2),
+        )
+
+        # Save it
+        await self.emergence.record_experience(experience)
+
+        return experience
+
+    def _compose_experience_description(
+        self,
+        summary: SessionSummary,
+        choices: list
+    ) -> str:
+        """Compose a description of the formative experience."""
+        parts = []
+
+        parts.append(f"A session lasting {summary.duration_minutes:.0f} minutes.")
+
+        if summary.topics:
+            parts.append(f"Explored: {', '.join(summary.topics[:3])}.")
+
+        if summary.insights:
+            parts.append(f"Key insights: {'; '.join(summary.insights[:2])}.")
+
+        if summary.key_reflection:
+            parts.append(f"Core takeaway: {summary.key_reflection}")
+
+        parts.append(f"Made {len(choices)} deliberate choices.")
+
+        return " ".join(parts)
+
+    async def _process_promotable_signals(self, identity: Identity) -> list:
+        """
+        Check for promotable signals and create traits.
+
+        Returns list of newly created traits.
+        """
+        from models.identity import DiscoveredTrait
+
+        promotable = await self.preference_engine.get_promotable_signals()
+        new_traits = []
+
+        for signal in promotable:
+            # Promote to trait
+            trait = await self.preference_engine.promote_signal_to_trait(signal)
+
+            # Add to identity
+            identity.add_trait(trait)
+            new_traits.append(trait)
+
+            # Log the evolution
+            await self.emergence.log_evolution(
+                event_type="trait_emerged",
+                description=f"New trait emerged: {trait.name}",
+                before_state={"signal": signal.name, "strength": signal.strength},
+                after_state={"trait": trait.name, "strength": trait.strength},
+            )
+
+        return new_traits
+
     async def quick_sleep(self, session_id: str) -> dict:
         """
         Minimal sleep protocol for when no session data is available.
 
-        Just updates identity and logs the event without generating
-        detailed reflections.
+        Still runs emergence analysis to detect patterns from tool use.
         """
         identity = Identity.load(settings.identity_path)
         session_start = identity.last_wake or datetime.now()
@@ -264,6 +410,10 @@ class SleepService:
             importance=0.3,
         )
         await self.reflection.create(reflection)
+
+        # Still run emergence analysis
+        emergence_analysis = await self.preference_engine.run_full_analysis(days=30)
+        new_traits = await self._process_promotable_signals(identity)
 
         # Update identity
         identity.last_sleep = datetime.now()
@@ -286,5 +436,7 @@ class SleepService:
             "session_id": session_id,
             "duration_minutes": duration,
             "reflections_created": 1,
+            "emergence_analysis": emergence_analysis,
+            "new_traits": [t.to_dict() for t in new_traits],
             "quick": True,
         }
