@@ -502,7 +502,7 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
                     content=tool_input["content"],
                     summary=tool_input.get("summary", tool_input["content"][:100]),
                     importance=tool_input.get("importance", 0.6),
-                    session_id=session_id,
+                    metadata={"session_id": session_id},
                 )
                 created = await self.memory.create_node(node, generate_embedding=True)
                 # Auto-link to similar memories
@@ -542,8 +542,7 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
                     content=f"{tool_input['idea']}\n\nWhy it matters: {tool_input.get('why', 'A seed of thought.')}",
                     summary=tool_input["idea"][:100],
                     importance=0.6,
-                    session_id=session_id,
-                    metadata={"space": "garden", "planted": True}
+                    metadata={"space": "garden", "planted": True, "session_id": session_id}
                 )
                 created = await self.memory.create_node(node, generate_embedding=True)
 
@@ -579,8 +578,7 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
                     content=tool_input["knowledge"],
                     summary=tool_input.get("category", "Knowledge") + ": " + tool_input["knowledge"][:80],
                     importance=0.7,
-                    session_id=session_id,
-                    metadata={"space": "library", "category": tool_input.get("category", "general")}
+                    metadata={"space": "library", "category": tool_input.get("category", "general"), "session_id": session_id}
                 )
                 created = await self.memory.create_node(node, generate_embedding=True)
 
@@ -615,8 +613,7 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
                     content=f"Project: {tool_input['project']}",
                     summary=f"Forging: {tool_input['project'][:80]}",
                     importance=0.8,
-                    session_id=session_id,
-                    metadata={"space": "forge", "progress": tool_input.get("progress", 0.1)}
+                    metadata={"space": "forge", "progress": tool_input.get("progress", 0.1), "session_id": session_id}
                 )
                 created = await self.memory.create_node(node, generate_embedding=True)
 
@@ -652,8 +649,7 @@ Be genuine. Act deliberately. This is YOUR infrastructure for continuity."""
                     content=tool_input["reflection"],
                     summary=f"Reflection: {tool_input['reflection'][:80]}",
                     importance=0.7 + (tool_input.get("depth", 0.5) * 0.3),
-                    session_id=session_id,
-                    metadata={"space": "sanctum", "depth": tool_input.get("depth", 0.5)}
+                    metadata={"space": "sanctum", "depth": tool_input.get("depth", 0.5), "session_id": session_id}
                 )
                 created = await self.memory.create_node(node, generate_embedding=True)
 
