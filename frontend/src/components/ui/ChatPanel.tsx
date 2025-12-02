@@ -247,15 +247,18 @@ export default function ChatPanel() {
       return;
     }
 
+    // Clear any previous error
+    setError(null);
+
     // Add user message
+    const userMessageId = 'user-' + Date.now();
     const userMessage: Message = {
-      id: 'user-' + Date.now(),
+      id: userMessageId,
       role: 'user',
       content,
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
-    setError(null);
 
     // Send to API
     setIsLoading(true);
@@ -272,16 +275,21 @@ export default function ChatPanel() {
 
       // If Claude took any actions, refresh the stats and world
       if (response.tool_actions && response.tool_actions.length > 0) {
-        fetchGrowthStats();
-        fetchWorld();
+        // Small delay to let backend commit to DB
+        setTimeout(() => {
+          fetchGrowthStats();
+          fetchWorld();
+        }, 500);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Chat error:', err);
-      setError('Failed to send message. Please try again.');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
+      setError(errorMessage);
       // Remove the user message on error
-      setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+      setMessages((prev) => prev.filter((m) => m.id !== userMessageId));
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleWake = async () => {
@@ -392,10 +400,14 @@ export default function ChatPanel() {
         </div>
       </div>
 
-      {/* Error banner */}
+      {/* Error banner - click to dismiss */}
       {error && (
-        <div className="px-3 py-2 bg-red-500/20 text-red-400 text-xs border-b border-red-500/30">
-          {error}
+        <div
+          className="px-3 py-2 bg-red-500/20 text-red-400 text-xs border-b border-red-500/30 cursor-pointer flex justify-between items-center"
+          onClick={() => setError(null)}
+        >
+          <span>{error}</span>
+          <span className="opacity-50 hover:opacity-100">✕</span>
         </div>
       )}
 
